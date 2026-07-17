@@ -17,6 +17,33 @@
 - [서비스 기획서](docs/기획서.md)
 - [홈 대시보드 디자인 시안](docs/design/홈대시보드-시안.html)
 
+## 프로젝트 구조
+
+```
+├── app/      # Flutter 클라이언트 (iOS · Android · 웹)
+├── server/   # API 서버 + KAMIS 수집 배치 (TypeScript · Fastify)
+└── docs/     # 기획서, 디자인 시안
+```
+
+### 서버 실행
+
+```bash
+cd server
+npm install
+npm run dev    # http://localhost:3000
+npm test       # 판정 로직 단위 테스트
+```
+
+- `GET /api/health` — 헬스 체크
+- `GET /api/items?category=채소` — 품목별 가격 + 판정(cheap/normal/pricey) + 등락(up/down/flat)
+
+### 앱 실행
+
+```bash
+cd app
+flutter run -d chrome   # 웹으로 실행
+```
+
 ## 상태
 
-🚧 개발 준비 중 — 웹/모바일 앱(Flutter) 동시 출시 목표
+🚧 개발 준비 중 — 웹/모바일 앱(Flutter) 동시 출시 목표. 현재 KAMIS API 키 발급 대기 중이라 서버는 샘플 데이터로 응답합니다 (`meta.source: "sample"`).
