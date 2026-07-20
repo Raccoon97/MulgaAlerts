@@ -42,11 +42,11 @@ jobs:
 
       - name: 웹 빌드
         working-directory: app
-        # API_BASE_URL은 저장소 Settings → Variables에 설정 (미설정 시 예시 데이터 모드)
+        # API_BASE_URL: 저장소 변수 우선, 없으면 집 서버 터널 URL (임시 호스팅)
         run: >
           flutter build web --release
           --base-href "/MulgaAlerts/"
-          --dart-define=API_BASE_URL=${{ vars.API_BASE_URL }}
+          --dart-define=API_BASE_URL=${{ vars.API_BASE_URL || 'https://loops-adoption-surely-soma.trycloudflare.com' }}
 
       - uses: actions/upload-pages-artifact@v3
         with:
