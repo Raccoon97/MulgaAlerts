@@ -13,6 +13,18 @@ const Map<String, List<String>> itemAliases = {
   'cabbage': ['김장배추', '고랭지배추'],
   'lettuce': ['청상추', '적상추'],
   'potato': ['수미감자'],
+  'garlic': ['깐마늘'],
+  'green-pepper': ['고추', '꽈리고추'],
+  'oyster-mushroom': ['버섯', '애느타리'],
+  'king-oyster': ['버섯', '새송이'],
+  'cherry-tomato': ['대추방울토마토'],
+  'kiwi': ['참다래'],
+  'beef-sirloin': ['소고기', '등심', '한우'],
+  'pork-neck': ['목심', '돼지고기'],
+  'milk': ['흰우유'],
+  'laver': ['마른김', '구운김'],
+  'anchovy': ['마른멸치'],
+  'sweet-potato': ['밤고구마'],
 };
 
 /// 검색어가 품목 이름·별칭·id 중 하나와 부분 일치하면 true.
