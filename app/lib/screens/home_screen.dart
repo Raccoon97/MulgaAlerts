@@ -137,9 +137,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHeader(PriceFeed feed) {
     final c = context.mulga;
     final dateLabel = feed.asOf ?? '오늘';
+    // KAMIS 일일 소매가는 서울 기준 (지역 선택은 확장 예정)
     final sourceLabel = feed.source == PriceSource.sample
         ? ' · 예시 데이터 (서버 미연결)'
-        : ' · 전국 평균 소매가';
+        : ' · 서울 평균 소매가 (KAMIS)';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
