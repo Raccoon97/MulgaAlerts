@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "collect": "tsx src/jobs/collect.ts"
+    "collect": "tsx src/jobs/collect.ts",
+    "start:prod": "node dist/index.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

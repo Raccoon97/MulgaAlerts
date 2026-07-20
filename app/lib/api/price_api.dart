@@ -23,7 +23,11 @@ class PriceApi {
   PriceApi({this.baseUrl = defaultBaseUrl, http.Client? client})
     : _client = client ?? http.Client();
 
-  static const String defaultBaseUrl = 'http://localhost:3000';
+  /// 빌드 시 --dart-define=API_BASE_URL=https://... 로 재정의 (배포용)
+  static const String defaultBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:3000',
+  );
   static const Duration _timeout = Duration(seconds: 3);
 
   final String baseUrl;
