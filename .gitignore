@@ -18,3 +18,6 @@ node_modules/
 # IDE
 .idea/
 .vscode/
+
+# 가격 이력 DB (로컬)
+server/data/

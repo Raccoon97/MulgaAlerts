@@ -2,11 +2,23 @@ import type { FastifyInstance } from 'fastify'
 import { deviationRate, judgeMovement, judgeVerdict } from '../domain/verdict.js'
 import { SAMPLE_ITEMS } from '../data/sample-items.js'
 import type { FeedItem, KamisFeedService } from '../collector/kamis-feed.js'
+import { ITEM_CATALOG } from '../collector/kamis-feed.js'
+import type { PriceHistoryRepository } from '../db/price-history.js'
 
 const CATEGORIES = ['채소', '과일', '축산', '수산', '곡물'] as const
+const DEFAULT_HISTORY_DAYS = 90
+const MAX_HISTORY_DAYS = 1095 // 3년
 
 interface ItemsQuery {
   category?: string
+}
+
+interface HistoryQuery {
+  days?: string
+}
+
+interface HistoryParams {
+  id: string
 }
 
 function sampleFeedItems(): readonly FeedItem[] {
@@ -26,8 +38,45 @@ function sampleFeedItems(): readonly FeedItem[] {
 export function registerPriceRoutes(
   app: FastifyInstance,
   feedService: KamisFeedService | null = null,
+  historyRepository: PriceHistoryRepository | null = null,
 ): void {
   app.get('/api/health', async () => ({ ok: true }))
+
+  app.get<{ Params: HistoryParams; Querystring: HistoryQuery }>(
+    '/api/items/:id/history',
+    async (request, reply) => {
+      if (historyRepository === null) {
+        return reply.status(503).send({
+          success: false,
+          data: null,
+          error: '가격 이력 저장소가 설정되지 않았습니다',
+        })
+      }
+      const { id } = request.params
+      if (!ITEM_CATALOG.some((entry) => entry.id === id)) {
+        return reply.status(404).send({
+          success: false,
+          data: null,
+          error: `알 수 없는 품목입니다: ${id}`,
+        })
+      }
+      const days = Number(request.query.days ?? DEFAULT_HISTORY_DAYS)
+      if (!Number.isInteger(days) || days <= 0 || days > MAX_HISTORY_DAYS) {
+        return reply.status(400).send({
+          success: false,
+          data: null,
+          error: `days는 1~${MAX_HISTORY_DAYS} 사이의 정수여야 합니다`,
+        })
+      }
+      const rows = historyRepository.getHistory(id, days)
+      return {
+        success: true,
+        data: rows,
+        error: null,
+        meta: { count: rows.length, days },
+      }
+    },
+  )
 
   app.get<{ Querystring: ItemsQuery }>('/api/items', async (request, reply) => {
     const { category } = request.query

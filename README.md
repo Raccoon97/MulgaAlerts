@@ -36,6 +36,21 @@ npm test       # 판정 로직 단위 테스트
 
 - `GET /api/health` — 헬스 체크
 - `GET /api/items?category=채소` — 품목별 가격 + 판정(cheap/normal/pricey) + 등락(up/down/flat)
+- `GET /api/items/:id/history?days=90` — 품목 가격 이력 (SQLite 적재분)
+
+### 일일 가격 수집 배치
+
+```bash
+cd server
+npm run collect   # KAMIS 수집 → data/mulga.db 적재 (크론 등록 권장: 평일 15시)
+```
+
+API 서버도 피드 조회 성공 시 같은 DB에 자동 적재합니다. KAMIS 인증키는 `server/.env`에 설정:
+
+```
+KAMIS_CERT_KEY=<발급받은 키>
+KAMIS_CERT_ID=<KAMIS 회원 ID>
+```
 
 ### 앱 실행
 

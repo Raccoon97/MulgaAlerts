@@ -2,6 +2,7 @@ import cors from '@fastify/cors'
 import Fastify from 'fastify'
 import { KamisClient } from './collector/kamis.js'
 import { KamisFeedService } from './collector/kamis-feed.js'
+import { PriceHistoryRepository, defaultDbPath } from './db/price-history.js'
 import { registerPriceRoutes } from './routes/prices.js'
 
 const DEFAULT_PORT = 3000
@@ -14,13 +15,20 @@ function loadDotEnv(): void {
   }
 }
 
-function buildFeedService(): KamisFeedService | null {
+function buildFeedService(
+  repository: PriceHistoryRepository,
+  logger: { error(context: Record<string, unknown>, message: string): void },
+): KamisFeedService | null {
   const certKey = process.env['KAMIS_CERT_KEY']
   const certId = process.env['KAMIS_CERT_ID']
   if (certKey === undefined || certKey === '' || certId === undefined || certId === '') {
     return null
   }
-  return new KamisFeedService(new KamisClient({ certKey, certId }))
+  return new KamisFeedService(
+    new KamisClient({ certKey, certId }),
+    repository,
+    logger,
+  )
 }
 
 async function main(): Promise<void> {
@@ -35,13 +43,14 @@ async function main(): Promise<void> {
   // 개발 편의를 위해 전체 허용. 배포 시 서비스 도메인으로 제한할 것.
   await app.register(cors, { origin: true })
 
-  const feedService = buildFeedService()
+  const repository = PriceHistoryRepository.open(defaultDbPath())
+  const feedService = buildFeedService(repository, app.log)
   app.log.info(
     feedService === null
       ? 'KAMIS 자격 증명 없음 — 샘플 데이터로 서비스'
-      : 'KAMIS 피드 활성화 (1시간 캐시)',
+      : `KAMIS 피드 활성화 (1시간 캐시) · 이력 DB: ${defaultDbPath()}`,
   )
-  registerPriceRoutes(app, feedService)
+  registerPriceRoutes(app, feedService, repository)
 
   await app.listen({ port, host: '0.0.0.0' })
 }

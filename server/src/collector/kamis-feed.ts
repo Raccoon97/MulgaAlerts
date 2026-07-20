@@ -2,6 +2,10 @@ import {
   KamisClient,
   type KamisDailyRow,
 } from './kamis.js'
+import type {
+  PriceHistoryRepository,
+  PriceRecord,
+} from '../db/price-history.js'
 import {
   deviationRate,
   judgeMovement,
@@ -139,12 +143,25 @@ export function lastBusinessDay(from: Date, offsetDays: number): string {
   return date.toISOString().slice(0, 10)
 }
 
+interface FeedLogger {
+  error(context: Record<string, unknown>, message: string): void
+}
+
+interface BuildResult {
+  readonly feed: KamisFeed
+  readonly records: readonly PriceRecord[]
+}
+
 export class KamisFeedService {
   private cache: { feed: KamisFeed; fetchedAt: number } | null = null
 
-  constructor(private readonly client: KamisClient) {}
+  constructor(
+    private readonly client: KamisClient,
+    private readonly repository: PriceHistoryRepository | null = null,
+    private readonly logger: FeedLogger = console,
+  ) {}
 
-  private async buildForDate(regday: string): Promise<KamisFeed> {
+  private async buildForDate(regday: string): Promise<BuildResult> {
     const categories = [...new Set(ITEM_CATALOG.map((e) => e.kamisCategory))]
     const rowsByCategory = new Map<string, readonly KamisDailyRow[]>()
     // KAMIS 서버 부하를 피하기 위해 순차 호출
@@ -156,23 +173,36 @@ export class KamisFeedService {
     }
 
     const items: FeedItem[] = []
+    const records: PriceRecord[] = []
     const missing: string[] = []
     for (const entry of ITEM_CATALOG) {
       const rows = rowsByCategory.get(entry.kamisCategory) ?? []
       // 우선순위 순으로 후보 행을 시도해, 데이터가 온전한 첫 행을 쓴다
       // (예: 여름 배추가 미조사면 봄 배추 행으로 폴백)
       let item: FeedItem | null = null
+      let usedRow: KamisDailyRow | null = null
       for (const row of rankCandidates(entry, rows)) {
         item = buildFeedItem(entry, row)
-        if (item !== null) break
+        if (item !== null) {
+          usedRow = row
+          break
+        }
       }
       if (item === null) {
         missing.push(entry.id)
       } else {
         items.push(item)
+        records.push({
+          itemId: item.id,
+          price: item.price,
+          normalPrice: item.normalPrice,
+          unit: item.unit,
+          source: 'kamis',
+          rawJson: usedRow === null ? null : JSON.stringify(usedRow),
+        })
       }
     }
-    return { items, asOf: regday, missing }
+    return { feed: { items, asOf: regday, missing }, records }
   }
 
   /**
@@ -184,25 +214,36 @@ export class KamisFeedService {
       return this.cache.feed
     }
 
-    let best: KamisFeed | null = null
+    let best: BuildResult | null = null
     const tried = new Set<string>()
     for (let offset = 0; offset < MAX_LOOKBACK_ATTEMPTS; offset++) {
       const regday = lastBusinessDay(now, offset)
       if (tried.has(regday)) continue
       tried.add(regday)
 
-      const feed = await this.buildForDate(regday)
-      if (best === null || feed.items.length > best.items.length) {
-        best = feed
+      const result = await this.buildForDate(regday)
+      if (best === null || result.feed.items.length > best.feed.items.length) {
+        best = result
       }
-      if (feed.items.length >= ITEM_CATALOG.length * GOOD_ENOUGH_RATIO) {
+      if (result.feed.items.length >= ITEM_CATALOG.length * GOOD_ENOUGH_RATIO) {
         break
       }
     }
 
     // best는 루프에서 최소 1회 할당됨
-    const feed = best as KamisFeed
+    const { feed, records } = best as BuildResult
+    this.persist(feed.asOf, records)
     this.cache = { feed, fetchedAt: now.getTime() }
     return feed
+  }
+
+  /** 수집 성공분을 이력 DB에 적재. 적재 실패가 API 응답을 막지는 않는다 */
+  private persist(date: string, records: readonly PriceRecord[]): void {
+    if (this.repository === null || records.length === 0) return
+    try {
+      this.repository.upsertMany(date, records)
+    } catch (error: unknown) {
+      this.logger.error({ err: error, date }, '가격 이력 적재 실패')
+    }
   }
 }
