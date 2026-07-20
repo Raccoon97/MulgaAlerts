@@ -48,9 +48,39 @@ void main() {
     await tester.tap(find.textContaining('지금 사면 좋은 품목'));
     await tester.pumpAndSettle();
 
-    // 샘플 데이터에서 저렴 판정은 4건 (양파·감자·바나나·계란)
-    expect(find.text('저렴'), findsNWidgets(4));
+    // 저렴 품목만 남는다 (화면에 보이는 카드 수는 뷰포트에 따라 다르므로
+    // 다른 판정 배지가 없는 것으로 검증)
+    expect(find.text('저렴'), findsWidgets);
     expect(find.text('비쌈'), findsNothing);
+    expect(find.text('보통'), findsNothing);
+  });
+
+  testWidgets('별칭으로 검색하면 해당 품목만 남는다 (달걀→계란)', (tester) async {
+    await tester.pumpWidget(_buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), '달걀');
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('계란'), findsWidgets);
+    expect(find.textContaining('배추'), findsNothing);
+    expect(find.text('저렴'), findsOneWidget); // 계란 카드 1장만
+  });
+
+  testWidgets('검색 결과가 없으면 안내 문구를 표시한다', (tester) async {
+    await tester.pumpWidget(_buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), '아보카도');
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('맞는 품목이 없어요'), findsOneWidget);
+
+    // 지우기 버튼으로 초기화하면 전체 목록이 돌아온다
+    await tester.tap(find.byTooltip('지우기'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('맞는 품목이 없어요'), findsNothing);
+    expect(find.textContaining('계란'), findsWidgets);
   });
 
   testWidgets('홈 카드를 탭하면 상세 화면으로 이동한다', (tester) async {

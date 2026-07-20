@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:mulga/api/price_api.dart';
+import 'package:mulga/domain/search.dart';
 import 'package:mulga/domain/verdict.dart';
 import 'package:mulga/models/price_item.dart';
 import 'package:mulga/screens/item_detail_screen.dart';
@@ -34,12 +35,20 @@ class _HomeScreenState extends State<HomeScreen> {
   String _category = '전체';
   SortMode _sort = SortMode.riseDesc;
   Verdict? _verdictFilter;
+  String _query = '';
+  final TextEditingController _searchController = TextEditingController();
   final Set<String> _favorites = {'egg', 'pork-belly'};
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -59,6 +68,14 @@ class _HomeScreenState extends State<HomeScreen> {
     var items = _scopedItems;
     if (_verdictFilter != null) {
       items = items.where((it) => it.verdict == _verdictFilter).toList();
+    }
+    if (_query.trim().isNotEmpty) {
+      items = items
+          .where(
+            (it) =>
+                matchesQuery(itemId: it.id, itemName: it.name, query: _query),
+          )
+          .toList();
     }
     double changeRate(PriceItem it) => (it.price - it.prevPrice) / it.prevPrice;
     final sorted = [...items]
@@ -98,6 +115,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                        sliver: SliverToBoxAdapter(child: _buildSearchField()),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                         sliver: SliverToBoxAdapter(child: _buildControls()),
                       ),
                       SliverPadding(
@@ -134,6 +155,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           }, childCount: _visibleItems.length),
                         ),
                       ),
+                      if (_visibleItems.isEmpty)
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(vertical: 48),
+                          sliver: SliverToBoxAdapter(child: _buildEmptyState()),
+                        ),
                     ],
                   ),
                 ),
@@ -310,6 +336,62 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    final c = context.mulga;
+    return TextField(
+      controller: _searchController,
+      onChanged: (value) => setState(() => _query = value),
+      style: TextStyle(fontSize: 14, color: c.ink, fontFamily: 'Pretendard'),
+      decoration: InputDecoration(
+        hintText: '품목 검색 (예: 달걀, 호박, 삼겹살)',
+        hintStyle: TextStyle(fontSize: 14, color: c.muted),
+        prefixIcon: Icon(Icons.search_rounded, color: c.muted, size: 20),
+        suffixIcon: _query.isEmpty
+            ? null
+            : IconButton(
+                tooltip: '지우기',
+                icon: Icon(Icons.close_rounded, color: c.muted, size: 18),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _query = '');
+                },
+              ),
+        filled: true,
+        fillColor: c.surface,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: c.line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: c.accent, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    final c = context.mulga;
+    final query = _query.trim();
+    return Column(
+      children: [
+        Icon(Icons.search_off_rounded, size: 36, color: c.muted),
+        const SizedBox(height: 10),
+        Text(
+          query.isEmpty ? '조건에 맞는 품목이 없어요' : "'$query'에 맞는 품목이 없어요",
+          style: TextStyle(fontSize: 14, color: c.muted),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '검색어나 필터를 바꿔보세요',
+          style: TextStyle(fontSize: 12.5, color: c.muted),
+        ),
+      ],
     );
   }
 
