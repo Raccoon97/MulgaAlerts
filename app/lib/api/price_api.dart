@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'package:mulga/data/sample_items.dart';
+import 'package:mulga/models/item_history.dart';
 import 'package:mulga/models/price_item.dart';
 
 /// 데이터 출처. UI에서 샘플 데이터임을 표시하는 데 사용한다.
@@ -54,6 +55,23 @@ class PriceApi {
       // 서버 미기동/네트워크 오류 시 번들 샘플로 폴백.
       // UI가 source로 구분해 "예시 데이터" 배너를 띄우므로 조용한 실패가 아니다.
       return PriceFeed(items: sampleItems, source: PriceSource.sample);
+    }
+  }
+
+  /// 품목 가격 이력 조회. 실패하면 null (상세 화면이 안내 문구 표시).
+  Future<ItemHistory?> fetchHistory(String itemId, {int days = 400}) async {
+    try {
+      final response = await _client
+          .get(Uri.parse('$baseUrl/api/items/$itemId/history?days=$days'))
+          .timeout(_timeout);
+      if (response.statusCode != 200) return null;
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (body is! Map<String, dynamic> || body['success'] != true) {
+        return null;
+      }
+      return ItemHistory.fromJson(body['data'] as Map<String, dynamic>);
+    } catch (_) {
+      return null;
     }
   }
 }

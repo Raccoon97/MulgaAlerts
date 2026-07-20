@@ -35,6 +35,14 @@ export interface HistoryRow {
   readonly unit: string
 }
 
+export interface LatestRecord {
+  readonly date: string
+  readonly price: number
+  readonly normalPrice: number
+  readonly unit: string
+  readonly rawJson: string | null
+}
+
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 export class PriceHistoryRepository {
@@ -114,6 +122,24 @@ export class PriceHistoryRepository {
       normalPrice: Number(row['normal_price']),
       unit: String(row['unit']),
     }))
+  }
+
+  /** 품목의 가장 최근 적재 레코드 (raw_json 포함). 없으면 null */
+  getLatestRecord(itemId: string): LatestRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT date, price, normal_price, unit, raw_json FROM price_history
+         WHERE item_id = ? ORDER BY date DESC LIMIT 1`,
+      )
+      .get(itemId) as Record<string, unknown> | undefined
+    if (row === undefined) return null
+    return {
+      date: String(row['date']),
+      price: Number(row['price']),
+      normalPrice: Number(row['normal_price']),
+      unit: String(row['unit']),
+      rawJson: row['raw_json'] === null ? null : String(row['raw_json']),
+    }
   }
 
   /** 가장 최근 적재 날짜. 비어 있으면 null */

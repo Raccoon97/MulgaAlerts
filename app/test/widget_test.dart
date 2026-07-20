@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mulga/api/price_api.dart';
 import 'package:mulga/data/sample_items.dart';
+import 'package:mulga/models/item_history.dart';
 import 'package:mulga/screens/home_screen.dart';
+import 'package:mulga/screens/item_detail_screen.dart';
 import 'package:mulga/theme.dart';
 
 Widget _buildApp() {
@@ -49,5 +51,66 @@ void main() {
     // 샘플 데이터에서 저렴 판정은 4건 (양파·감자·바나나·계란)
     expect(find.text('저렴'), findsNWidgets(4));
     expect(find.text('비쌈'), findsNothing);
+  });
+
+  testWidgets('홈 카드를 탭하면 상세 화면으로 이동한다', (tester) async {
+    await tester.pumpWidget(_buildApp());
+    await tester.pumpAndSettle();
+
+    // 즐겨찾기로 상단 고정된 계란 카드를 탭
+    await tester.tap(find.textContaining('계란').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ItemDetailScreen), findsOneWidget);
+    expect(find.text('시점별 비교'), findsOneWidget);
+  });
+
+  testWidgets('상세 화면이 차트와 시점 비교를 표시한다', (tester) async {
+    final egg = sampleItems.firstWhere((it) => it.id == 'egg');
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: ItemDetailScreen(
+          item: egg,
+          historyLoader: () async => ItemHistory(
+            unit: '30구',
+            normalPrice: 6830,
+            history: const [HistoryPoint(date: '2026-07-17', price: 7345)],
+            milestones: const [
+              Milestone(label: '당일', daysAgo: 0, price: 7345),
+              Milestone(label: '1일전', daysAgo: 1, price: 7373),
+              Milestone(label: '1주일전', daysAgo: 7, price: 7379),
+              Milestone(label: '1개월전', daysAgo: 30, price: 7383),
+              Milestone(label: '1년전', daysAgo: 365, price: 6873),
+            ],
+            milestonesAsOf: '2026-07-17',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('계란'), findsOneWidget);
+    expect(find.text('시점별 비교'), findsOneWidget);
+    expect(find.text('1개월전'), findsWidgets);
+    expect(find.text('평년'), findsOneWidget);
+
+    // 기간 탭 전환이 동작한다
+    await tester.tap(find.text('1년'));
+    await tester.pumpAndSettle();
+    expect(find.text('1년전'), findsWidgets);
+  });
+
+  testWidgets('이력이 없으면 안내 문구를 표시한다', (tester) async {
+    final egg = sampleItems.firstWhere((it) => it.id == 'egg');
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: ItemDetailScreen(item: egg, historyLoader: () async => null),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('가격 데이터가 아직 부족해요'), findsOneWidget);
   });
 }

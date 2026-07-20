@@ -10,6 +10,7 @@ import {
 import {
   ITEM_CATALOG,
   buildFeedItem,
+  buildMilestones,
   pickRow,
 } from '../src/collector/kamis-feed.js'
 
@@ -97,5 +98,32 @@ describe('pickRow / buildFeedItem', () => {
     const row = pickRow(entry, cutOnly)
     expect(row).not.toBeNull()
     expect(buildFeedItem(entry, row!)).toBeNull()
+  })
+})
+
+describe('buildMilestones', () => {
+  test('저장된 행에서 존재하는 시점 가격만 추출한다', () => {
+    const rows = parseDailyPriceResponse(fixture)
+    const egg = rows.find((r) => r.itemCode === '9903' && r.kindCode === '23')
+    const points = buildMilestones(JSON.stringify(egg))
+
+    const labels = points.map((p) => p.label)
+    expect(labels).toContain('당일')
+    expect(labels).toContain('1년전')
+    expect(points.find((p) => p.label === '당일')?.price).toBe(7345)
+    expect(points.find((p) => p.label === '당일')?.daysAgo).toBe(0)
+  })
+
+  test('null·손상된 JSON·비객체 입력은 빈 배열을 반환한다', () => {
+    expect(buildMilestones(null)).toEqual([])
+    expect(buildMilestones('{잘못된 json')).toEqual([])
+    expect(buildMilestones('"문자열"')).toEqual([])
+  })
+
+  test('가격이 null인 시점은 제외한다', () => {
+    const points = buildMilestones(
+      JSON.stringify({ today: null, dayAgo: 1000, weekAgo: null }),
+    )
+    expect(points).toEqual([{ label: '1일전', daysAgo: 1, price: 1000 }])
   })
 })

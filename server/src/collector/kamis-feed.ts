@@ -126,6 +126,41 @@ export function buildFeedItem(
   }
 }
 
+/** 상세 차트용 시점 포인트 (KAMIS가 제공하는 과거 시점 가격) */
+export interface MilestonePoint {
+  readonly label: string
+  readonly daysAgo: number
+  readonly price: number
+}
+
+/** 저장된 raw_json(KamisDailyRow)에서 시점 포인트를 추출 */
+export function buildMilestones(rawJson: string | null): readonly MilestonePoint[] {
+  if (rawJson === null) return []
+  let row: Record<string, unknown>
+  try {
+    const parsed: unknown = JSON.parse(rawJson)
+    if (typeof parsed !== 'object' || parsed === null) return []
+    row = parsed as Record<string, unknown>
+  } catch {
+    return []
+  }
+  const candidates: ReadonlyArray<[keyof KamisDailyRow, string, number]> = [
+    ['today', '당일', 0],
+    ['dayAgo', '1일전', 1],
+    ['weekAgo', '1주일전', 7],
+    ['monthAgo', '1개월전', 30],
+    ['yearAgo', '1년전', 365],
+  ]
+  const points: MilestonePoint[] = []
+  for (const [key, label, daysAgo] of candidates) {
+    const value = row[key]
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      points.push({ label, daysAgo, price: value })
+    }
+  }
+  return points
+}
+
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1시간 — KAMIS는 일 단위 데이터
 const MAX_LOOKBACK_ATTEMPTS = 4
 const GOOD_ENOUGH_RATIO = 0.7

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:mulga/api/price_api.dart';
 import 'package:mulga/domain/verdict.dart';
 import 'package:mulga/models/price_item.dart';
+import 'package:mulga/screens/item_detail_screen.dart';
 import 'package:mulga/theme.dart';
 import 'package:mulga/widgets/item_card.dart';
 
@@ -114,14 +115,21 @@ class _HomeScreenState extends State<HomeScreen> {
                             index,
                           ) {
                             final item = _visibleItems[index];
-                            return ItemCard(
-                              item: item,
-                              isFavorite: _favorites.contains(item.id),
-                              onToggleFavorite: () => setState(() {
-                                if (!_favorites.add(item.id)) {
-                                  _favorites.remove(item.id);
-                                }
-                              }),
+                            return GestureDetector(
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => ItemDetailScreen(item: item),
+                                ),
+                              ),
+                              child: ItemCard(
+                                item: item,
+                                isFavorite: _favorites.contains(item.id),
+                                onToggleFavorite: () => setState(() {
+                                  if (!_favorites.add(item.id)) {
+                                    _favorites.remove(item.id);
+                                  }
+                                }),
+                              ),
                             );
                           }, childCount: _visibleItems.length),
                         ),

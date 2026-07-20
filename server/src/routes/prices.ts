@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { deviationRate, judgeMovement, judgeVerdict } from '../domain/verdict.js'
 import { SAMPLE_ITEMS } from '../data/sample-items.js'
 import type { FeedItem, KamisFeedService } from '../collector/kamis-feed.js'
-import { ITEM_CATALOG } from '../collector/kamis-feed.js'
+import { ITEM_CATALOG, buildMilestones } from '../collector/kamis-feed.js'
 import type { PriceHistoryRepository } from '../db/price-history.js'
 
 const CATEGORIES = ['채소', '과일', '축산', '수산', '곡물'] as const
@@ -69,9 +69,17 @@ export function registerPriceRoutes(
         })
       }
       const rows = historyRepository.getHistory(id, days)
+      const latest = historyRepository.getLatestRecord(id)
       return {
         success: true,
-        data: rows,
+        data: {
+          unit: latest?.unit ?? null,
+          normalPrice: latest?.normalPrice ?? null,
+          history: rows,
+          // KAMIS 시점 데이터(1일전~1년전) — 일일 이력이 쌓이기 전에도 차트를 그릴 수 있게
+          milestones: latest === null ? [] : buildMilestones(latest.rawJson),
+          milestonesAsOf: latest?.date ?? null,
+        },
         error: null,
         meta: { count: rows.length, days },
       }

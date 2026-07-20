@@ -74,4 +74,21 @@ describe('PriceHistoryRepository', () => {
     expect(() => repo.upsertMany('2026/07/17', [sampleRecord])).toThrow()
     expect(() => repo.upsertMany('내일', [sampleRecord])).toThrow()
   })
+
+  test('getLatestRecord는 가장 최근 레코드(raw_json 포함)를 반환한다', () => {
+    const repo = makeRepo()
+    expect(repo.getLatestRecord('egg')).toBeNull()
+
+    repo.upsertMany('2026-07-16', [
+      { ...sampleRecord, price: 7300, rawJson: '{"today":7300}' },
+    ])
+    repo.upsertMany('2026-07-17', [
+      { ...sampleRecord, rawJson: '{"today":7345}' },
+    ])
+
+    const latest = repo.getLatestRecord('egg')
+    expect(latest?.date).toBe('2026-07-17')
+    expect(latest?.price).toBe(7345)
+    expect(latest?.rawJson).toBe('{"today":7345}')
+  })
 })
