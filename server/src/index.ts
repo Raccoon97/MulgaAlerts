@@ -1,3 +1,4 @@
+import cors from '@fastify/cors'
 import Fastify from 'fastify'
 import { registerPriceRoutes } from './routes/prices.js'
 
@@ -10,6 +11,8 @@ async function main(): Promise<void> {
   }
 
   const app = Fastify({ logger: true })
+  // 개발 편의를 위해 전체 허용. 배포 시 서비스 도메인으로 제한할 것.
+  await app.register(cors, { origin: true })
   registerPriceRoutes(app)
 
   await app.listen({ port, host: '0.0.0.0' })
