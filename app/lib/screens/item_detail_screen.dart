@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import 'package:mulga/api/price_api.dart';
+import 'package:mulga/data/regions.dart';
 import 'package:mulga/domain/verdict.dart';
 import 'package:mulga/models/item_history.dart';
 import 'package:mulga/models/price_item.dart';
@@ -20,9 +21,15 @@ enum ChartPeriod {
 }
 
 class ItemDetailScreen extends StatefulWidget {
-  const ItemDetailScreen({super.key, required this.item, this.historyLoader});
+  const ItemDetailScreen({
+    super.key,
+    required this.item,
+    this.regionCode = defaultRegionCode,
+    this.historyLoader,
+  });
 
   final PriceItem item;
+  final String regionCode;
 
   /// 테스트에서 네트워크 없이 이력을 주입하기 위한 훅
   final Future<ItemHistory?> Function()? historyLoader;
@@ -44,7 +51,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
   Future<void> _load() async {
     final loader =
-        widget.historyLoader ?? () => PriceApi().fetchHistory(widget.item.id);
+        widget.historyLoader ??
+        () =>
+            PriceApi().fetchHistory(widget.item.id, region: widget.regionCode);
     final history = await loader();
     if (mounted) {
       setState(() {
@@ -94,7 +103,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 _buildComparisonCard(),
                 const SizedBox(height: 16),
                 Text(
-                  '자료: KAMIS 농수산물유통정보 · 서울 평균 소매가'
+                  '자료: KAMIS 농수산물유통정보 · ${regionByCode(widget.regionCode).name} 평균 소매가'
                   '${_history?.milestonesAsOf != null ? ' · 기준일 ${_history!.milestonesAsOf}' : ''}',
                   style: TextStyle(fontSize: 11.5, color: c.muted),
                   textAlign: TextAlign.center,

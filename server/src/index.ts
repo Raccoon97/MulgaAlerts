@@ -57,18 +57,21 @@ async function main(): Promise<void> {
   // 콜드 캐시 방지: 시작 직후 + 30분마다 캐시를 미리 데운다.
   // KAMIS 순차 수집이 10초 이상 걸려, 요청 시점 수집은 클라이언트 타임아웃을 유발한다.
   if (feedService !== null) {
-    const warm = (): void => {
-      feedService
-        .getFeed()
-        .then((feed) =>
-          app.log.info(`피드 캐시 갱신: ${feed.asOf} 기준 ${feed.items.length}개`),
-        )
-        .catch((error: unknown) =>
-          app.log.error({ err: error }, '피드 캐시 갱신 실패'),
-        )
+    const warm = async (): Promise<void> => {
+      // 기본 지역 + 최근 요청된 지역을 순차 워밍 (KAMIS 부하 고려)
+      for (const region of feedService.regionsToWarm()) {
+        try {
+          const feed = await feedService.getFeed(region)
+          app.log.info(
+            `피드 캐시 갱신(${region}): ${feed.asOf} 기준 ${feed.items.length}개`,
+          )
+        } catch (error: unknown) {
+          app.log.error({ err: error, region }, '피드 캐시 갱신 실패')
+        }
+      }
     }
-    warm()
-    setInterval(warm, 30 * 60 * 1000)
+    void warm()
+    setInterval(() => void warm(), 30 * 60 * 1000)
   }
 }
 

@@ -10,13 +10,21 @@ import 'package:mulga/models/price_item.dart';
 enum PriceSource { server, sample }
 
 class PriceFeed {
-  const PriceFeed({required this.items, required this.source, this.asOf});
+  const PriceFeed({
+    required this.items,
+    required this.source,
+    this.asOf,
+    this.regionName,
+  });
 
   final List<PriceItem> items;
   final PriceSource source;
 
   /// YYYY-MM-DD (서버 응답 meta.asOf). 폴백일 때는 null.
   final String? asOf;
+
+  /// 조회 지역명 (예: 서울). 폴백일 때는 null.
+  final String? regionName;
 }
 
 class PriceApi {
@@ -31,15 +39,22 @@ class PriceApi {
   // 터널 경유 지연을 감안한 여유값. 서버는 캐시를 상시 워밍하므로 보통 <1초
   static const Duration _timeout = Duration(seconds: 6);
 
+  // 다른 지역 첫 조회는 서버가 KAMIS를 새로 수집(10초+)할 수 있어 넉넉하게
+  static const Duration _regionTimeout = Duration(seconds: 30);
+
   final String baseUrl;
   final http.Client _client;
 
   /// 서버에서 품목 목록을 가져온다. 실패하면 번들 샘플로 폴백한다.
-  Future<PriceFeed> fetchItems() async {
+  /// 기본 지역이 아닌 곳은 서버가 처음 수집할 때 시간이 걸려 타임아웃을 늘린다.
+  Future<PriceFeed> fetchItems({String? region}) async {
+    final isDefault = region == null || region == '1101';
+    final timeout = isDefault ? _timeout : _regionTimeout;
+    final query = isDefault ? '' : '?region=$region';
     try {
       final response = await _client
-          .get(Uri.parse('$baseUrl/api/items'))
-          .timeout(_timeout);
+          .get(Uri.parse('$baseUrl/api/items$query'))
+          .timeout(timeout);
       if (response.statusCode != 200) {
         throw http.ClientException('HTTP ${response.statusCode}');
       }
@@ -49,12 +64,14 @@ class PriceApi {
       }
       final data = body['data'] as List<dynamic>;
       final meta = body['meta'] as Map<String, dynamic>?;
+      final regionInfo = meta?['region'] as Map<String, dynamic>?;
       return PriceFeed(
         items: data
             .map((raw) => PriceItem.fromJson(raw as Map<String, dynamic>))
             .toList(growable: false),
         source: PriceSource.server,
         asOf: meta?['asOf'] as String?,
+        regionName: regionInfo?['name'] as String?,
       );
     } catch (_) {
       // 서버 미기동/네트워크 오류 시 번들 샘플로 폴백.
@@ -64,11 +81,21 @@ class PriceApi {
   }
 
   /// 품목 가격 이력 조회. 실패하면 null (상세 화면이 안내 문구 표시).
-  Future<ItemHistory?> fetchHistory(String itemId, {int days = 400}) async {
+  Future<ItemHistory?> fetchHistory(
+    String itemId, {
+    int days = 400,
+    String? region,
+  }) async {
+    final isDefault = region == null || region == '1101';
+    final regionQuery = isDefault ? '' : '&region=$region';
     try {
       final response = await _client
-          .get(Uri.parse('$baseUrl/api/items/$itemId/history?days=$days'))
-          .timeout(_timeout);
+          .get(
+            Uri.parse(
+              '$baseUrl/api/items/$itemId/history?days=$days$regionQuery',
+            ),
+          )
+          .timeout(isDefault ? _timeout : _regionTimeout);
       if (response.statusCode != 200) return null;
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       if (body is! Map<String, dynamic> || body['success'] != true) {

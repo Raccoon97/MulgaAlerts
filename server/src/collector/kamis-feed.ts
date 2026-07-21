@@ -15,6 +15,48 @@ import {
 } from '../domain/verdict.js'
 
 /**
+ * KAMIS 소매가 조사 도시 (2026-07 실측으로 데이터 제공 확인).
+ * 시·군 전체가 아니라 조사 대상 도시만 지원된다.
+ * 축산 등 일부 품목은 전국 단일가라 지역 간 차이가 없다.
+ */
+export interface Region {
+  readonly code: string
+  readonly name: string
+}
+
+export const DEFAULT_REGION_CODE = '1101'
+
+// 2026-07-21 채소(200) 카테고리 실측으로 농수산물 데이터 제공 확인된 도시.
+// 성남·의정부 등은 축산(전국 단일가)만 나와 제외했다.
+export const REGIONS: readonly Region[] = [
+  { code: '1101', name: '서울' },
+  { code: '2300', name: '인천' },
+  { code: '3111', name: '수원' },
+  { code: '3138', name: '고양' },
+  { code: '3145', name: '용인' },
+  { code: '2100', name: '부산' },
+  { code: '2200', name: '대구' },
+  { code: '2501', name: '대전' },
+  { code: '2401', name: '광주' },
+  { code: '2601', name: '울산' },
+  { code: '2701', name: '세종' },
+  { code: '3211', name: '춘천' },
+  { code: '3214', name: '강릉' },
+  { code: '3311', name: '청주' },
+  { code: '3411', name: '천안' },
+  { code: '3511', name: '전주' },
+  { code: '3613', name: '순천' },
+  { code: '3711', name: '포항' },
+  { code: '3714', name: '안동' },
+  { code: '3814', name: '창원' },
+  { code: '3911', name: '제주' },
+]
+
+export function isValidRegion(code: string): boolean {
+  return REGIONS.some((region) => region.code === code)
+}
+
+/**
  * MVP 품목 → KAMIS 코드 매핑 (2026-07 실측).
  * kind/rank는 소비 빈도가 높은 대표 규격 하나를 고른다.
  * 계절 kind(배추 봄/여름 등)는 가격이 조사된 행을 우선 선택한다.
@@ -214,7 +256,13 @@ interface BuildResult {
 }
 
 export class KamisFeedService {
-  private cache: { feed: KamisFeed; fetchedAt: number } | null = null
+  private readonly cacheByRegion = new Map<
+    string,
+    { result: BuildResult; fetchedAt: number }
+  >()
+
+  /** 워밍 대상: 최근 요청된 지역 (기본 지역은 항상 포함) */
+  private readonly activeRegions = new Map<string, number>()
 
   constructor(
     private readonly client: KamisClient,
@@ -222,14 +270,21 @@ export class KamisFeedService {
     private readonly logger: FeedLogger = console,
   ) {}
 
-  private async buildForDate(regday: string): Promise<BuildResult> {
+  private async buildForDate(
+    regday: string,
+    regionCode: string,
+  ): Promise<BuildResult> {
     const categories = [...new Set(ITEM_CATALOG.map((e) => e.kamisCategory))]
     const rowsByCategory = new Map<string, readonly KamisDailyRow[]>()
     // KAMIS 서버 부하를 피하기 위해 순차 호출
     for (const category of categories) {
       rowsByCategory.set(
         category,
-        await this.client.fetchDailyPricesByCategory(category, regday),
+        await this.client.fetchDailyPricesByCategory(
+          category,
+          regday,
+          regionCode,
+        ),
       )
     }
 
@@ -269,10 +324,17 @@ export class KamisFeedService {
   /**
    * 최근 영업일부터 하루씩 거슬러 올라가며, 품목 커버리지가
    * 충분한(70% 이상) 첫 결과를 쓴다. 공휴일 연휴 대비.
+   * 지역별로 별도 캐시(1시간)를 유지한다.
    */
-  async getFeed(now: Date = new Date()): Promise<KamisFeed> {
-    if (this.cache && now.getTime() - this.cache.fetchedAt < CACHE_TTL_MS) {
-      return this.cache.feed
+  async getFeed(
+    regionCode: string = DEFAULT_REGION_CODE,
+    now: Date = new Date(),
+  ): Promise<KamisFeed> {
+    this.activeRegions.set(regionCode, now.getTime())
+
+    const cached = this.cacheByRegion.get(regionCode)
+    if (cached && now.getTime() - cached.fetchedAt < CACHE_TTL_MS) {
+      return cached.result.feed
     }
 
     let best: BuildResult | null = null
@@ -282,7 +344,7 @@ export class KamisFeedService {
       if (tried.has(regday)) continue
       tried.add(regday)
 
-      const result = await this.buildForDate(regday)
+      const result = await this.buildForDate(regday, regionCode)
       if (best === null || result.feed.items.length > best.feed.items.length) {
         best = result
       }
@@ -292,10 +354,33 @@ export class KamisFeedService {
     }
 
     // best는 루프에서 최소 1회 할당됨
-    const { feed, records } = best as BuildResult
-    this.persist(feed.asOf, records)
-    this.cache = { feed, fetchedAt: now.getTime() }
-    return feed
+    const result = best as BuildResult
+    // 일일 이력 적재는 기본 지역(서울) 기준으로만 유지한다
+    if (regionCode === DEFAULT_REGION_CODE) {
+      this.persist(result.feed.asOf, result.records)
+    }
+    this.cacheByRegion.set(regionCode, { result, fetchedAt: now.getTime() })
+    return result.feed
+  }
+
+  /** 지역별 최신 수집분에서 품목의 원본 행(raw) 조회 — 상세 시점 비교용 */
+  async getRecord(
+    regionCode: string,
+    itemId: string,
+  ): Promise<PriceRecord | null> {
+    await this.getFeed(regionCode)
+    const cached = this.cacheByRegion.get(regionCode)
+    return cached?.result.records.find((r) => r.itemId === itemId) ?? null
+  }
+
+  /** 워밍 대상 지역: 기본 지역 + 최근 24시간 내 요청된 지역 */
+  regionsToWarm(now: Date = new Date()): readonly string[] {
+    const dayAgo = now.getTime() - 24 * 60 * 60 * 1000
+    const regions = new Set<string>([DEFAULT_REGION_CODE])
+    for (const [code, lastSeen] of this.activeRegions) {
+      if (lastSeen >= dayAgo) regions.add(code)
+    }
+    return [...regions]
   }
 
   /** 수집 성공분을 이력 DB에 적재. 적재 실패가 API 응답을 막지는 않는다 */

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:mulga/api/price_api.dart';
+import 'package:mulga/data/regions.dart';
 import 'package:mulga/domain/search.dart';
 import 'package:mulga/domain/verdict.dart';
 import 'package:mulga/models/price_item.dart';
@@ -33,6 +34,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   PriceFeed? _feed;
   String _category = '전체';
+  String _regionCode = defaultRegionCode;
   SortMode _sort = SortMode.riseDesc;
   Verdict? _verdictFilter;
   String _query = '';
@@ -52,9 +54,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _load() async {
-    final loader = widget.loader ?? PriceApi().fetchItems;
+    final loader =
+        widget.loader ?? () => PriceApi().fetchItems(region: _regionCode);
     final feed = await loader();
     if (mounted) setState(() => _feed = feed);
+  }
+
+  void _changeRegion(String code) {
+    if (code == _regionCode) return;
+    setState(() {
+      _regionCode = code;
+      _feed = null; // 로딩 표시
+    });
+    _load();
   }
 
   List<PriceItem> get _scopedItems {
@@ -139,7 +151,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             return GestureDetector(
                               onTap: () => Navigator.of(context).push(
                                 MaterialPageRoute<void>(
-                                  builder: (_) => ItemDetailScreen(item: item),
+                                  builder: (_) => ItemDetailScreen(
+                                    item: item,
+                                    regionCode: _regionCode,
+                                  ),
                                 ),
                               ),
                               child: ItemCard(
@@ -171,10 +186,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHeader(PriceFeed feed) {
     final c = context.mulga;
     final dateLabel = feed.asOf ?? '오늘';
-    // KAMIS 일일 소매가는 서울 기준 (지역 선택은 확장 예정)
+    final regionName = feed.regionName ?? regionByCode(_regionCode).name;
     final sourceLabel = feed.source == PriceSource.sample
         ? ' · 예시 데이터 (서버 미연결)'
-        : ' · 서울 평균 소매가 (KAMIS)';
+        : ' · $regionName 평균 소매가 (KAMIS)';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -211,6 +226,40 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(fontSize: 13, color: c.muted),
               ),
             ],
+          ),
+        ),
+        // 지역 선택: KAMIS 조사 도시만 지원 (안산·화성·성남 등은 미조사 지역)
+        PopupMenuButton<String>(
+          tooltip: '지역 선택',
+          initialValue: _regionCode,
+          onSelected: _changeRegion,
+          itemBuilder: (context) => [
+            for (final region in regions)
+              PopupMenuItem(value: region.code, child: Text(region.name)),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: c.line),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.place_rounded, size: 15, color: c.accent),
+                const SizedBox(width: 4),
+                Text(
+                  regionByCode(_regionCode).name,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: c.ink,
+                  ),
+                ),
+                Icon(Icons.expand_more_rounded, size: 16, color: c.muted),
+              ],
+            ),
           ),
         ),
         IconButton(

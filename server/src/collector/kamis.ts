@@ -98,7 +98,11 @@ export class KamisClient {
     private readonly fetchFn: typeof fetch = fetch,
   ) {}
 
-  buildDailyPriceUrl(categoryCode: string, regday: string): URL {
+  buildDailyPriceUrl(
+    categoryCode: string,
+    regday: string,
+    regionCode: string,
+  ): URL {
     const url = new URL(KAMIS_BASE_URL)
     url.searchParams.set('action', 'dailyPriceByCategoryList')
     url.searchParams.set('p_cert_key', this.credentials.certKey)
@@ -106,7 +110,7 @@ export class KamisClient {
     url.searchParams.set('p_returntype', 'json')
     url.searchParams.set('p_product_cls_code', '01') // 소매
     url.searchParams.set('p_item_category_code', categoryCode)
-    url.searchParams.set('p_country_code', '1101') // 서울 (전국 평균은 미제공)
+    url.searchParams.set('p_country_code', regionCode) // 조사 도시 (전국 평균은 미제공)
     url.searchParams.set('p_regday', regday)
     url.searchParams.set('p_convert_kg_yn', 'N')
     return url
@@ -116,8 +120,9 @@ export class KamisClient {
   async fetchDailyPricesByCategory(
     categoryCode: string,
     regday: string,
+    regionCode: string,
   ): Promise<readonly KamisDailyRow[]> {
-    const url = this.buildDailyPriceUrl(categoryCode, regday)
+    const url = this.buildDailyPriceUrl(categoryCode, regday, regionCode)
     const response = await this.fetchFn(url, {
       headers: { 'User-Agent': BROWSER_UA, Accept: 'application/json' },
       redirect: 'follow',

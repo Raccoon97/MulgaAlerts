@@ -7,10 +7,14 @@ import {
   parseDailyPriceResponse,
   parseKamisPrice,
 } from '../src/collector/kamis.js'
+import { KamisClient } from '../src/collector/kamis.js'
 import {
+  DEFAULT_REGION_CODE,
   ITEM_CATALOG,
+  REGIONS,
   buildFeedItem,
   buildMilestones,
+  isValidRegion,
   pickRow,
 } from '../src/collector/kamis-feed.js'
 
@@ -98,6 +102,24 @@ describe('pickRow / buildFeedItem', () => {
     const row = pickRow(entry, cutOnly)
     expect(row).not.toBeNull()
     expect(buildFeedItem(entry, row!)).toBeNull()
+  })
+})
+
+describe('지역(REGIONS)', () => {
+  test('기본 지역은 서울이고 지역 코드 검증이 동작한다', () => {
+    expect(DEFAULT_REGION_CODE).toBe('1101')
+    expect(REGIONS.find((r) => r.code === '3111')?.name).toBe('수원')
+    expect(isValidRegion('1101')).toBe(true)
+    expect(isValidRegion('3113')).toBe(false) // 성남: 농수산물 미조사 지역
+    expect(isValidRegion('9999')).toBe(false)
+    expect(isValidRegion('안산')).toBe(false)
+  })
+
+  test('요청 URL에 지역 코드가 반영된다', () => {
+    const client = new KamisClient({ certKey: 'test-key', certId: 'test-id' })
+    const url = client.buildDailyPriceUrl('200', '2026-07-21', '3111')
+    expect(url.searchParams.get('p_country_code')).toBe('3111')
+    expect(url.searchParams.get('p_item_category_code')).toBe('200')
   })
 })
 
