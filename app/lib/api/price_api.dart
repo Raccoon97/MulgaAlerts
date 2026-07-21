@@ -39,8 +39,9 @@ class PriceApi {
   // 터널 경유 지연을 감안한 여유값. 서버는 캐시를 상시 워밍하므로 보통 <1초
   static const Duration _timeout = Duration(seconds: 6);
 
-  // 다른 지역 첫 조회는 서버가 KAMIS를 새로 수집(10초+)할 수 있어 넉넉하게
-  static const Duration _regionTimeout = Duration(seconds: 30);
+  // 서버가 전 지역을 사전 워밍하므로 보통 즉시 응답.
+  // 드물게 콜드일 때도 병렬 수집이라 2~3초면 충분하다.
+  static const Duration _regionTimeout = Duration(seconds: 12);
 
   final String baseUrl;
   final http.Client _client;

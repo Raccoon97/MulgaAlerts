@@ -230,6 +230,7 @@ export function buildMilestones(rawJson: string | null): readonly MilestonePoint
 }
 
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1시간 — KAMIS는 일 단위 데이터
+const REGION_REFRESH_MS = 6 * 60 * 60 * 1000 // 비기본 지역 사전 워밍 주기
 const MAX_LOOKBACK_ATTEMPTS = 4
 const GOOD_ENOUGH_RATIO = 0.7
 
@@ -275,18 +276,20 @@ export class KamisFeedService {
     regionCode: string,
   ): Promise<BuildResult> {
     const categories = [...new Set(ITEM_CATALOG.map((e) => e.kamisCategory))]
-    const rowsByCategory = new Map<string, readonly KamisDailyRow[]>()
-    // KAMIS 서버 부하를 피하기 위해 순차 호출
-    for (const category of categories) {
-      rowsByCategory.set(
+    // 카테고리 6종을 병렬 조회 — 순차(10초+) 대비 2~3초로 단축
+    const results = await Promise.all(
+      categories.map(async (category) => ({
         category,
-        await this.client.fetchDailyPricesByCategory(
+        rows: await this.client.fetchDailyPricesByCategory(
           category,
           regday,
           regionCode,
         ),
-      )
-    }
+      })),
+    )
+    const rowsByCategory = new Map<string, readonly KamisDailyRow[]>(
+      results.map((r) => [r.category, r.rows]),
+    )
 
     const items: FeedItem[] = []
     const records: PriceRecord[] = []
@@ -332,8 +335,11 @@ export class KamisFeedService {
   ): Promise<KamisFeed> {
     this.activeRegions.set(regionCode, now.getTime())
 
+    // 비기본 지역은 워밍 주기(6시간)와 맞춰 캐시를 더 오래 신뢰한다
+    const maxAge =
+      regionCode === DEFAULT_REGION_CODE ? CACHE_TTL_MS : REGION_REFRESH_MS
     const cached = this.cacheByRegion.get(regionCode)
-    if (cached && now.getTime() - cached.fetchedAt < CACHE_TTL_MS) {
+    if (cached && now.getTime() - cached.fetchedAt < maxAge) {
       return cached.result.feed
     }
 
@@ -373,14 +379,22 @@ export class KamisFeedService {
     return cached?.result.records.find((r) => r.itemId === itemId) ?? null
   }
 
-  /** 워밍 대상 지역: 기본 지역 + 최근 24시간 내 요청된 지역 */
+  /**
+   * 워밍 대상 지역. 어느 지역을 열어도 즉시 뜨도록 전 지역을 미리 수집한다.
+   * 가격은 하루 한 번(15시경)만 바뀌므로:
+   * - 기본 지역(서울): 캐시 만료(1시간) 시마다
+   * - 그 외 지역: 6시간 이상 지났을 때만 (KAMIS 부하 절제)
+   */
   regionsToWarm(now: Date = new Date()): readonly string[] {
-    const dayAgo = now.getTime() - 24 * 60 * 60 * 1000
-    const regions = new Set<string>([DEFAULT_REGION_CODE])
-    for (const [code, lastSeen] of this.activeRegions) {
-      if (lastSeen >= dayAgo) regions.add(code)
+    const stale = (code: string, maxAgeMs: number): boolean => {
+      const cached = this.cacheByRegion.get(code)
+      return !cached || now.getTime() - cached.fetchedAt >= maxAgeMs
     }
-    return [...regions]
+    return REGIONS.map((r) => r.code).filter((code) =>
+      code === DEFAULT_REGION_CODE
+        ? stale(code, CACHE_TTL_MS)
+        : stale(code, REGION_REFRESH_MS),
+    )
   }
 
   /** 수집 성공분을 이력 DB에 적재. 적재 실패가 API 응답을 막지는 않는다 */
