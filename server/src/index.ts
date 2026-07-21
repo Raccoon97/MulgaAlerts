@@ -53,6 +53,23 @@ async function main(): Promise<void> {
   registerPriceRoutes(app, feedService, repository)
 
   await app.listen({ port, host: '0.0.0.0' })
+
+  // 콜드 캐시 방지: 시작 직후 + 30분마다 캐시를 미리 데운다.
+  // KAMIS 순차 수집이 10초 이상 걸려, 요청 시점 수집은 클라이언트 타임아웃을 유발한다.
+  if (feedService !== null) {
+    const warm = (): void => {
+      feedService
+        .getFeed()
+        .then((feed) =>
+          app.log.info(`피드 캐시 갱신: ${feed.asOf} 기준 ${feed.items.length}개`),
+        )
+        .catch((error: unknown) =>
+          app.log.error({ err: error }, '피드 캐시 갱신 실패'),
+        )
+    }
+    warm()
+    setInterval(warm, 30 * 60 * 1000)
+  }
 }
 
 main().catch((error) => {

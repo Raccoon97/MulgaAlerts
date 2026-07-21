@@ -28,7 +28,8 @@ class PriceApi {
     'API_BASE_URL',
     defaultValue: 'http://localhost:3000',
   );
-  static const Duration _timeout = Duration(seconds: 3);
+  // 터널 경유 지연을 감안한 여유값. 서버는 캐시를 상시 워밍하므로 보통 <1초
+  static const Duration _timeout = Duration(seconds: 6);
 
   final String baseUrl;
   final http.Client _client;
