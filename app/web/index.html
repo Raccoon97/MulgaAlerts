@@ -18,19 +18,37 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="장바구니 물가 판정 서비스 — 오늘 가격이 평시보다 싼지 비싼지 한눈에">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="mulga">
+  <meta name="apple-mobile-web-app-title" content="물가를알려줘">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>mulga</title>
+  <title>물가를알려줘</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* iOS Safari가 주소창 접힘/펼침 때 문서 자체를 스크롤해
+       앱 위에 빈 공간이 생기는 문제 방지.
+       스크롤은 Flutter 앱 내부에서만 처리한다. */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      position: fixed;
+      inset: 0;
+      overscroll-behavior: none;
+      background: #141A15;
+    }
+  </style>
 </head>
 <body>
   <!--
