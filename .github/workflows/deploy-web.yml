@@ -23,10 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 저장소에 Pages가 꺼져 있으면 자동 활성화
+      # 사전 조건: 저장소 Settings → Pages → Source를 "GitHub Actions"로 설정
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: subosito/flutter-action@v2
         with:
