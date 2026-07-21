@@ -260,17 +260,28 @@ class _HomeScreenState extends State<HomeScreen> {
               _stat('▲ 상승', rise, c.up),
               _stat('▼ 하락', fall, c.down),
               _stat('— 보합', flat, c.ink),
-              _verdictChip(
-                '● 지금 사면 좋은 품목 $cheap개',
-                Verdict.cheap,
-                fg: c.cheap,
-                bg: c.cheapBg,
+            ],
+          ),
+          const SizedBox(height: 8),
+          // 판정 칩 2개는 화면 폭과 무관하게 항상 한 줄 유지
+          Row(
+            children: [
+              Expanded(
+                child: _verdictChip(
+                  '● 지금 사면 좋은 품목 $cheap개',
+                  Verdict.cheap,
+                  fg: c.cheap,
+                  bg: c.cheapBg,
+                ),
               ),
-              _verdictChip(
-                '● 기다리면 좋은 품목 $pricey개',
-                Verdict.pricey,
-                fg: c.pricey,
-                bg: c.priceyBg,
+              const SizedBox(width: 8),
+              Expanded(
+                child: _verdictChip(
+                  '● 기다리면 좋은 품목 $pricey개',
+                  Verdict.pricey,
+                  fg: c.pricey,
+                  bg: c.priceyBg,
+                ),
               ),
             ],
           ),
@@ -321,18 +332,24 @@ class _HomeScreenState extends State<HomeScreen> {
       borderRadius: BorderRadius.circular(999),
       onTap: () => setState(() => _verdictFilter = selected ? null : verdict),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: selected ? fg : Colors.transparent),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            color: fg,
+        // 좁은 화면에서는 글자를 줄여서라도 줄바꿈 없이 한 줄 유지
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: fg,
+            ),
           ),
         ),
       ),

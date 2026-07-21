@@ -49,56 +49,76 @@ class ItemCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 이름·단위를 세로로 쌓아 좁은 화면에서도 말줄임 없이 표시
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 34,
+                height: 34,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: c.surface2,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   item.name.characters.first,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w800,
                     color: c.accent,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(
-                        text: item.name,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: c.ink,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 긴 이름(방울토마토 등)은 글자를 줄여서라도 전체 표시
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          item.name,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: c.ink,
+                            height: 1.15,
+                          ),
                         ),
                       ),
-                      TextSpan(
-                        text: '  ${item.unit}',
-                        style: TextStyle(fontSize: 12, color: c.muted),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      item.unit,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: c.muted,
+                        height: 1.15,
                       ),
-                    ],
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
-              IconButton(
-                onPressed: onToggleFavorite,
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                tooltip: isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가',
-                icon: Icon(
-                  isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
-                  size: 22,
-                  color: isFavorite ? c.star : c.line,
+              InkWell(
+                onTap: onToggleFavorite,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: Icon(
+                    isFavorite
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    size: 21,
+                    color: isFavorite ? c.star : c.line,
+                    semanticLabel: isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가',
+                  ),
                 ),
               ),
             ],
