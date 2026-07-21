@@ -304,14 +304,20 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 52,
-              getTitlesWidget: (value, meta) => Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Text(
-                  _compactWon(value),
-                  style: TextStyle(fontSize: 10.5, color: c.muted),
-                  textAlign: TextAlign.right,
-                ),
-              ),
+              getTitlesWidget: (value, meta) {
+                // 축 경계값 라벨은 그리드 라벨과 겹치므로 숨긴다
+                if (value == meta.min || value == meta.max) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Text(
+                    _compactWon(value),
+                    style: TextStyle(fontSize: 10.5, color: c.muted),
+                    textAlign: TextAlign.right,
+                  ),
+                );
+              },
             ),
           ),
           bottomTitles: AxisTitles(
@@ -352,9 +358,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             spots: spots,
             color: c.accent,
             barWidth: 2.5,
-            isCurved: true,
-            curveSmoothness: 0.25,
-            preventCurveOverShooting: true,
+            // 시점 간격이 불균등(1일·1주·1개월·1년)해서 곡선 보간 시
+            // 촘촘한 구간에서 고리 모양이 생긴다 → 직선 연결
+            isCurved: false,
             dotData: FlDotData(
               show: true,
               getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(

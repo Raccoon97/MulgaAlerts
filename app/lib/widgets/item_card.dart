@@ -162,12 +162,17 @@ class ItemCard extends StatelessWidget {
             children: [
               _VerdictBadge(verdict: item.verdict),
               const SizedBox(width: 8),
+              // 좁은 카드에서도 끝까지 읽히도록 짧은 문구 + 최대 2줄
               Expanded(
                 child: Text(
                   _hintText(item),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11.5, color: c.muted),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: c.muted,
+                    height: 1.25,
+                  ),
                 ),
               ),
             ],
@@ -177,11 +182,12 @@ class ItemCard extends StatelessWidget {
     );
   }
 
+  // 카드에는 핵심만 짧게. 전체 판정 문장은 상세 화면에서 보여준다.
   static String _hintText(PriceItem item) {
     final pct = (item.deviation.abs() * 100).round();
     return switch (item.verdict) {
-      Verdict.cheap => '평시보다 $pct% 저렴 — 사기 좋은 시기',
-      Verdict.pricey => '평시보다 $pct% 비쌈 — 기다려 볼 만해요',
+      Verdict.cheap => '평시보다 $pct% 저렴',
+      Verdict.pricey => '평시보다 $pct% 비쌈',
       Verdict.normal => '평시 수준',
     };
   }
