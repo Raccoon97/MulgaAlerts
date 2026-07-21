@@ -34,7 +34,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   PriceFeed? _feed;
   String _category = '전체';
-  String _regionCode = defaultRegionCode;
+  City _city = cityByName('서울');
   SortMode _sort = SortMode.riseDesc;
   Verdict? _verdictFilter;
   String _query = '';
@@ -55,18 +55,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _load() async {
     final loader =
-        widget.loader ?? () => PriceApi().fetchItems(region: _regionCode);
+        widget.loader ?? () => PriceApi().fetchItems(region: _city.regionCode);
     final feed = await loader();
     if (mounted) setState(() => _feed = feed);
   }
 
-  void _changeRegion(String code) {
-    if (code == _regionCode) return;
+  void _changeCity(City city) {
+    final regionChanged = city.regionCode != _city.regionCode;
     setState(() {
-      _regionCode = code;
-      _feed = null; // 로딩 표시
+      _city = city;
+      if (regionChanged) _feed = null; // 로딩 표시
     });
-    _load();
+    if (regionChanged) _load();
+  }
+
+  Future<void> _showCityPicker() async {
+    final selected = await showModalBottomSheet<City>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CityPickerSheet(current: _city),
+    );
+    if (selected != null) _changeCity(selected);
   }
 
   List<PriceItem> get _scopedItems {
@@ -153,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 MaterialPageRoute<void>(
                                   builder: (_) => ItemDetailScreen(
                                     item: item,
-                                    regionCode: _regionCode,
+                                    cityName: _city.name,
                                   ),
                                 ),
                               ),
@@ -186,10 +196,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHeader(PriceFeed feed) {
     final c = context.mulga;
     final dateLabel = feed.asOf ?? '오늘';
-    final regionName = feed.regionName ?? regionByCode(_regionCode).name;
+    // 조사 도시가 아니면 어느 도시 데이터 기준인지 투명하게 표기
     final sourceLabel = feed.source == PriceSource.sample
         ? ' · 예시 데이터 (서버 미연결)'
-        : ' · $regionName 평균 소매가 (KAMIS)';
+        : _city.isSurveyed
+        ? ' · ${_city.name} 평균 소매가 (KAMIS)'
+        : ' · ${_city.name} · 인근 ${_city.surveyRegion.name} 조사가 기준';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -228,15 +240,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        // 지역 선택: KAMIS 조사 도시만 지원 (안산·화성·성남 등은 미조사 지역)
-        PopupMenuButton<String>(
-          tooltip: '지역 선택',
-          initialValue: _regionCode,
-          onSelected: _changeRegion,
-          itemBuilder: (context) => [
-            for (final region in regions)
-              PopupMenuItem(value: region.code, child: Text(region.name)),
-          ],
+        // 도시 선택: 전국 시 단위, 미조사 도시는 인근 조사 도시 데이터 기준
+        InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: _showCityPicker,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
@@ -250,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Icon(Icons.place_rounded, size: 15, color: c.accent),
                 const SizedBox(width: 4),
                 Text(
-                  regionByCode(_regionCode).name,
+                  _city.name,
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -529,6 +536,175 @@ class _HomeScreenState extends State<HomeScreen> {
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             color: selected ? c.accentInk : c.muted,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 전국 도시 선택 시트 — 검색 + 조사 도시/인근 기준 구분 표시
+class _CityPickerSheet extends StatefulWidget {
+  const _CityPickerSheet({required this.current});
+
+  final City current;
+
+  @override
+  State<_CityPickerSheet> createState() => _CityPickerSheetState();
+}
+
+class _CityPickerSheetState extends State<_CityPickerSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.mulga;
+    final query = _query.trim();
+    final filtered = cities
+        .where((city) => query.isEmpty || city.name.contains(query))
+        .toList(growable: false);
+    // 조사 도시를 먼저, 그 안에서는 정의 순서 유지
+    final surveyed = filtered.where((city) => city.isSurveyed).toList();
+    final nearby = filtered.where((city) => !city.isSurveyed).toList();
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.72,
+      decoration: BoxDecoration(
+        color: c.bg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: c.line,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '지역 선택',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: c.ink,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '조사 도시가 아니면 가장 가까운 KAMIS 조사 도시 가격을 보여드려요',
+            style: TextStyle(fontSize: 12, color: c.muted),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            autofocus: false,
+            onChanged: (value) => setState(() => _query = value),
+            style: TextStyle(
+              fontSize: 14,
+              color: c.ink,
+              fontFamily: 'Pretendard',
+            ),
+            decoration: InputDecoration(
+              hintText: '도시 검색 (예: 안산, 성남)',
+              hintStyle: TextStyle(fontSize: 14, color: c.muted),
+              prefixIcon: Icon(Icons.search_rounded, color: c.muted, size: 20),
+              filled: true,
+              fillColor: c.surface,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: c.line),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: c.accent, width: 1.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: (surveyed.isEmpty && nearby.isEmpty)
+                ? Center(
+                    child: Text(
+                      "'$query'에 맞는 도시가 없어요",
+                      style: TextStyle(fontSize: 13, color: c.muted),
+                    ),
+                  )
+                : ListView(
+                    children: [
+                      if (surveyed.isNotEmpty) ...[
+                        _sectionLabel('KAMIS 조사 도시'),
+                        for (final city in surveyed) _cityTile(city),
+                      ],
+                      if (nearby.isNotEmpty) ...[
+                        _sectionLabel('그 외 도시 (인근 조사가 기준)'),
+                        for (final city in nearby) _cityTile(city),
+                      ],
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String label) {
+    final c = context.mulga;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 14, 4, 6),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+          color: c.muted,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+
+  Widget _cityTile(City city) {
+    final c = context.mulga;
+    final selected = city.name == widget.current.name;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => Navigator.of(context).pop(city),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        decoration: BoxDecoration(
+          color: selected ? c.surface2 : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                city.name,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: c.ink,
+                ),
+              ),
+            ),
+            if (!city.isSurveyed)
+              Text(
+                '${city.surveyRegion.name} 기준',
+                style: TextStyle(fontSize: 12, color: c.muted),
+              ),
+            if (selected) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.check_rounded, size: 18, color: c.accent),
+            ],
+          ],
         ),
       ),
     );
