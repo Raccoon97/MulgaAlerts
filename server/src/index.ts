@@ -1,5 +1,6 @@
 import cors from '@fastify/cors'
 import Fastify from 'fastify'
+import { ChamgagyeokClient } from './collector/chamgagyeok.js'
 import { KamisClient } from './collector/kamis.js'
 import { KamisFeedService } from './collector/kamis-feed.js'
 import { PriceHistoryRepository, defaultDbPath } from './db/price-history.js'
@@ -72,6 +73,25 @@ async function main(): Promise<void> {
     }
     void warm()
     setInterval(() => void warm(), 30 * 60 * 1000)
+  }
+
+  // 참가격 지역 실판매가 수집 (월간 파일 — 시작 시 + 하루 1회 갱신 확인)
+  const dataGoKrKey = process.env['DATA_GO_KR_KEY']
+  if (dataGoKrKey !== undefined && dataGoKrKey !== '') {
+    const chamClient = new ChamgagyeokClient(dataGoKrKey)
+    const collectLocal = async (): Promise<void> => {
+      try {
+        const rows = await chamClient.fetchLatestLocalPrices()
+        repository.upsertLocalPrices(rows)
+        app.log.info(`참가격 지역 실판매가 적재: ${rows.length}건`)
+      } catch (error: unknown) {
+        app.log.error({ err: error }, '참가격 수집 실패')
+      }
+    }
+    void collectLocal()
+    setInterval(() => void collectLocal(), 24 * 60 * 60 * 1000)
+  } else {
+    app.log.info('DATA_GO_KR_KEY 없음 — 지역 실판매가 비활성화')
   }
 }
 

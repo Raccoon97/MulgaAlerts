@@ -43,6 +43,15 @@ export interface LatestRecord {
   readonly rawJson: string | null
 }
 
+/** 참가격 지역 매장 실판매가 한 건 */
+export interface LocalPriceRecord {
+  readonly surveyDate: string
+  readonly store: string
+  readonly product: string
+  readonly itemId: string
+  readonly price: number
+}
+
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 export class PriceHistoryRepository {
@@ -69,6 +78,17 @@ export class PriceHistoryRepository {
       );
       CREATE INDEX IF NOT EXISTS idx_price_history_item
         ON price_history (item_id, date);
+      CREATE TABLE IF NOT EXISTS local_prices (
+        survey_date  TEXT    NOT NULL,
+        store        TEXT    NOT NULL,
+        product      TEXT    NOT NULL,
+        item_id      TEXT    NOT NULL,
+        price        INTEGER NOT NULL,
+        fetched_at   TEXT    NOT NULL,
+        PRIMARY KEY (survey_date, store, product)
+      );
+      CREATE INDEX IF NOT EXISTS idx_local_prices_item
+        ON local_prices (item_id, survey_date);
     `)
     return new PriceHistoryRepository(db)
   }
@@ -148,6 +168,56 @@ export class PriceHistoryRepository {
       .prepare('SELECT MAX(date) AS latest FROM price_history')
       .get() as { latest: string | null }
     return row.latest
+  }
+
+  /** 참가격 지역 실판매가 적재. (조사일, 판매점, 상품) 기준 덮어쓰기 */
+  upsertLocalPrices(rows: readonly LocalPriceRecord[]): void {
+    const upsert = this.db.prepare(`
+      INSERT INTO local_prices
+        (survey_date, store, product, item_id, price, fetched_at)
+      VALUES (@surveyDate, @store, @product, @itemId, @price, @fetchedAt)
+      ON CONFLICT (survey_date, store, product) DO UPDATE SET
+        item_id = excluded.item_id,
+        price = excluded.price,
+        fetched_at = excluded.fetched_at
+    `)
+    const fetchedAt = new Date().toISOString()
+    const insertAll = this.db.transaction(
+      (records: readonly LocalPriceRecord[]) => {
+        for (const record of records) {
+          upsert.run({ ...record, fetchedAt })
+        }
+      },
+    )
+    insertAll(rows)
+  }
+
+  /**
+   * 품목의 지역 매장 실판매가 조회.
+   * 판매점명이 키워드 중 하나를 포함하는 행을 최신 조사일 기준으로 반환.
+   */
+  getLocalPrices(
+    itemId: string,
+    storeKeywords: readonly string[],
+    limit = 10,
+  ): readonly LocalPriceRecord[] {
+    if (storeKeywords.length === 0) return []
+    const conditions = storeKeywords.map(() => 'store LIKE ?').join(' OR ')
+    const rows = this.db
+      .prepare(
+        `SELECT survey_date, store, product, item_id, price FROM local_prices
+         WHERE item_id = ? AND (${conditions})
+         ORDER BY survey_date DESC, price ASC
+         LIMIT ?`,
+      )
+      .all(itemId, ...storeKeywords.map((k) => `%${k}%`), limit)
+    return (rows as Array<Record<string, unknown>>).map((row) => ({
+      surveyDate: String(row['survey_date']),
+      store: String(row['store']),
+      product: String(row['product']),
+      itemId: String(row['item_id']),
+      price: Number(row['price']),
+    }))
   }
 
   close(): void {

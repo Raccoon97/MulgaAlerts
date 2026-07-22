@@ -9,6 +9,7 @@ import {
   buildMilestones,
   isValidRegion,
 } from '../collector/kamis-feed.js'
+import { storeKeywordsForCity } from '../collector/chamgagyeok.js'
 import type { PriceHistoryRepository } from '../db/price-history.js'
 
 const CATEGORIES = ['채소', '과일', '축산', '수산', '곡물'] as const
@@ -134,6 +135,54 @@ export function registerPriceRoutes(
         },
         error: null,
         meta: { count: rows.length, days, region },
+      }
+    },
+  )
+
+  // 우리 동네 매장 실판매가 (한국소비자원 참가격, 월간 갱신)
+  app.get<{ Params: HistoryParams; Querystring: { city?: string } }>(
+    '/api/items/:id/local',
+    async (request, reply) => {
+      if (historyRepository === null) {
+        return reply.status(503).send({
+          success: false,
+          data: null,
+          error: '가격 이력 저장소가 설정되지 않았습니다',
+        })
+      }
+      const { id } = request.params
+      if (!ITEM_CATALOG.some((entry) => entry.id === id)) {
+        return reply.status(404).send({
+          success: false,
+          data: null,
+          error: `알 수 없는 품목입니다: ${id}`,
+        })
+      }
+      const city = (request.query.city ?? '').trim()
+      if (city === '' || city.length > 20) {
+        return reply.status(400).send({
+          success: false,
+          data: null,
+          error: 'city 파라미터가 필요합니다',
+        })
+      }
+      const rows = historyRepository.getLocalPrices(
+        id,
+        storeKeywordsForCity(city),
+      )
+      return {
+        success: true,
+        data: {
+          city,
+          rows: rows.map((r) => ({
+            store: r.store,
+            product: r.product,
+            price: r.price,
+            surveyDate: r.surveyDate,
+          })),
+        },
+        error: null,
+        meta: { count: rows.length, source: '한국소비자원 참가격' },
       }
     },
   )

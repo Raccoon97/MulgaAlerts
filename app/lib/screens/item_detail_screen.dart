@@ -5,6 +5,7 @@ import 'package:mulga/api/price_api.dart';
 import 'package:mulga/data/regions.dart';
 import 'package:mulga/domain/verdict.dart';
 import 'package:mulga/models/item_history.dart';
+import 'package:mulga/models/local_price.dart';
 import 'package:mulga/models/price_item.dart';
 import 'package:mulga/theme.dart';
 import 'package:mulga/widgets/item_card.dart' show formatWon;
@@ -26,6 +27,7 @@ class ItemDetailScreen extends StatefulWidget {
     required this.item,
     this.cityName = '서울',
     this.historyLoader,
+    this.localLoader,
   });
 
   final PriceItem item;
@@ -38,12 +40,16 @@ class ItemDetailScreen extends StatefulWidget {
   /// 테스트에서 네트워크 없이 이력을 주입하기 위한 훅
   final Future<ItemHistory?> Function()? historyLoader;
 
+  /// 테스트에서 동네 실판매가를 주입하기 위한 훅
+  final Future<List<LocalPrice>> Function()? localLoader;
+
   @override
   State<ItemDetailScreen> createState() => _ItemDetailScreenState();
 }
 
 class _ItemDetailScreenState extends State<ItemDetailScreen> {
   ItemHistory? _history;
+  List<LocalPrice> _localPrices = const [];
   bool _loading = true;
   ChartPeriod _period = ChartPeriod.month;
 
@@ -60,10 +66,18 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           widget.item.id,
           region: widget.city.regionCode,
         );
+    // 이력과 동네 실판매가를 병렬 로드
+    final localFuture =
+        widget.localLoader?.call() ??
+        (widget.historyLoader == null
+            ? PriceApi().fetchLocalPrices(widget.item.id, widget.cityName)
+            : Future.value(const <LocalPrice>[]));
     final history = await loader();
+    final localPrices = await localFuture;
     if (mounted) {
       setState(() {
         _history = history;
+        _localPrices = localPrices;
         _loading = false;
       });
     }
@@ -107,6 +121,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 _buildChartCard(),
                 const SizedBox(height: 20),
                 _buildComparisonCard(),
+                if (_localPrices.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  _buildLocalPricesCard(),
+                ],
                 const SizedBox(height: 16),
                 Text(
                   '자료: KAMIS 농수산물유통정보 · '
@@ -424,6 +442,83 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             ),
           for (final m in rows) _comparisonRow(m.label, m.price, current),
           _comparisonRow('평년', normalPrice, current, isBaseline: true),
+        ],
+      ),
+    );
+  }
+
+  /// 우리 동네 매장 실판매가 (참가격) — 조사 지연이 있어 참고 정보로만 표시
+  Widget _buildLocalPricesCard() {
+    final c = context.mulga;
+    // (판매점, 상품) 기준 최신 조사만 남긴다
+    final seen = <String>{};
+    final rows = <LocalPrice>[];
+    for (final p in _localPrices) {
+      final key = '${p.store}|${p.product}';
+      if (seen.add(key)) rows.add(p);
+    }
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${widget.cityName} 매장 실판매가',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: c.ink,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '한국소비자원 참가격 조사 (조사일 기준, 현재가와 다를 수 있어요)',
+            style: TextStyle(fontSize: 11.5, color: c.muted),
+          ),
+          const SizedBox(height: 10),
+          for (final p in rows.take(5))
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          p.store,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: c.ink,
+                          ),
+                        ),
+                        Text(
+                          '${p.product} · ${p.surveyDate} 조사',
+                          style: TextStyle(fontSize: 11.5, color: c.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    formatWon(p.price),
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: c.ink,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

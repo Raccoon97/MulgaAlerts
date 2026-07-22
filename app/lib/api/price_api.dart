@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:mulga/data/sample_items.dart';
 import 'package:mulga/models/item_history.dart';
+import 'package:mulga/models/local_price.dart';
 import 'package:mulga/models/price_item.dart';
 
 /// 데이터 출처. UI에서 샘플 데이터임을 표시하는 데 사용한다.
@@ -105,6 +106,31 @@ class PriceApi {
       return ItemHistory.fromJson(body['data'] as Map<String, dynamic>);
     } catch (_) {
       return null;
+    }
+  }
+
+  /// 우리 동네 매장 실판매가 (참가격). 실패·미지원 도시는 빈 리스트.
+  Future<List<LocalPrice>> fetchLocalPrices(String itemId, String city) async {
+    try {
+      final response = await _client
+          .get(
+            Uri.parse(
+              '$baseUrl/api/items/$itemId/local'
+              '?city=${Uri.encodeQueryComponent(city)}',
+            ),
+          )
+          .timeout(_timeout);
+      if (response.statusCode != 200) return const [];
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (body is! Map<String, dynamic> || body['success'] != true) {
+        return const [];
+      }
+      final data = body['data'] as Map<String, dynamic>;
+      return (data['rows'] as List<dynamic>? ?? [])
+          .map((raw) => LocalPrice.fromJson(raw as Map<String, dynamic>))
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
     }
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mulga/api/price_api.dart';
 import 'package:mulga/data/sample_items.dart';
 import 'package:mulga/models/item_history.dart';
+import 'package:mulga/models/local_price.dart';
 import 'package:mulga/screens/home_screen.dart';
 import 'package:mulga/screens/item_detail_screen.dart';
 import 'package:mulga/theme.dart';
@@ -129,6 +130,40 @@ void main() {
     await tester.tap(find.text('1년'));
     await tester.pumpAndSettle();
     expect(find.text('1년전'), findsWidgets);
+  });
+
+  testWidgets('상세 화면에 동네 매장 실판매가 섹션이 표시된다', (tester) async {
+    final egg = sampleItems.firstWhere((it) => it.id == 'egg');
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: ItemDetailScreen(
+          item: egg,
+          cityName: '안산',
+          historyLoader: () async => null,
+          localLoader: () async => const [
+            LocalPrice(
+              store: '롯데슈퍼안산점',
+              product: 'CJ 1등급 깨끗한 계란(15개)',
+              price: 7990,
+              surveyDate: '2026-06-26',
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 섹션은 화면 하단에 있어 스크롤해야 렌더된다
+    await tester.dragUntilVisible(
+      find.text('안산 매장 실판매가'),
+      find.byType(ListView),
+      const Offset(0, -200),
+    );
+    expect(find.text('안산 매장 실판매가'), findsOneWidget);
+    expect(find.text('롯데슈퍼안산점'), findsOneWidget);
+    expect(find.text('7,990원'), findsOneWidget);
+    expect(find.textContaining('2026-06-26 조사'), findsOneWidget);
   });
 
   testWidgets('이력이 없으면 안내 문구를 표시한다', (tester) async {
